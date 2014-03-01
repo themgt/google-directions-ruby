@@ -5,7 +5,7 @@ require 'open-uri'
 require 'nokogiri'
 
 class GoogleDirections
-	attr_reader :status, :doc, :xml, :origin, :destination, :options
+	attr_reader :status, :directions, :xml, :origin, :destination, :options
 	@@base_url = 'http://maps.googleapis.com/maps/api/directions/xml'
 	@@default_options = {
 		:language => :en,
@@ -55,8 +55,13 @@ class GoogleDirections
 		@directions.css("leg")
 	end
 
-	def get_steps leg
-		leg.css("step")
+	def get_steps leg = nil
+		if @status == 'OK'
+			@directions.css('steps') if leg.nil?
+			leg.css("step") unless leg.nil?
+		else
+			[]
+		end
 	end
 
 	def get_leg_polyline leg
@@ -77,14 +82,7 @@ class GoogleDirections
 	end
 
 	def get_text_directions
-		text_directions = "<ul>"
-		@directions.css("leg").each do |l|
-			l.css("step").each do |s|
-				text_directions += "<li>" + s.css("html_instructions").text + "</li>"
-			end
-		end
-		text_directions += "</ul>"
-		text_directions
+		@directions.css("html_instructions").map { |e| e.text }
 	end
 
 	def xml_call
@@ -134,14 +132,6 @@ class GoogleDirections
 
 	def public_url
 		"http://maps.google.com/maps?saddr=#{transcribe(@origin)}&daddr=#{transcribe(@destination)}&hl=#{@options[:language]}&ie=UTF8"
-	end
-
-	def steps
-		if @status == 'OK'
-			@directions.css('html_instructions').map {|a| a.text }
-		else
-			[]
-		end
 	end
 
 	private
