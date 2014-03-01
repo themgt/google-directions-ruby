@@ -76,6 +76,17 @@ class GoogleDirections
 		url_part
 	end
 
+	def get_text_directions
+		text_directions = "<ul>"
+		@directions.css("leg").each do |l|
+			l.css("step").each do |s|
+				text_directions += "<li>" + s.css("html_instructions").text + "</li>"
+			end
+		end
+		text_directions += "</ul>"
+		text_directions
+	end
+
 	def xml_call
 		@url
 	end
