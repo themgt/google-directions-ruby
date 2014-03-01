@@ -17,17 +17,8 @@ class GoogleDirections
 	def initialize(origin, destination, opts=@@default_options)
 		@origin = origin
 		@destination = destination
-		@waypoints = nil
+		@waypoints = []
 		@options = opts.merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
-	end
-
-	def get_directions
-		@options[:waypoints] = get_waypoints if @waypoints
-		@url = @@base_url + '?' + @options.to_query
-		@xml = open(@url).read
-		@doc = Nokogiri::XML(@xml)
-		@status = @doc.css('status').text
-		@xml = open(@url).read
 	end
 
 	def add_waypoint address
@@ -36,6 +27,15 @@ class GoogleDirections
 
 	def get_waypoints
 		@waypoints.join("|")
+	end
+
+	def get_directions
+		@options[:waypoints] = get_waypoints unless @waypoints.blank?
+		@url = @@base_url + '?' + @options.to_query
+		@xml = open(@url).read
+		@doc = Nokogiri::XML(@xml)
+		@status = @doc.css('status').text
+		@xml = open(@url).read
 	end
 
 	def get_overview_polyline
@@ -47,12 +47,12 @@ class GoogleDirections
 	end
 
 	def get_steps leg
-		leg.css("steps")
+		leg.css("step")
 	end
 
 	def get_leg_polyline leg
 		polylines = []
-		leg.css("steps").each do |step|
+		leg.css("step").each do |step|
 			polylines << step.css("polyline").css("points").text
 		end
 		polylines
@@ -139,7 +139,7 @@ class Hash
 
 	def to_query
 		params = ''
-
+#should there be some url encoding going on?
 		each do |k, v|
 			params << "#{k}=#{v}&"
 		end
