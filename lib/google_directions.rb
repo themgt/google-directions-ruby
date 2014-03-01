@@ -13,16 +13,24 @@ class GoogleDirections
 		:sensor => :false,
 		:mode => :driving,
 	}
-
-	def initialize(origin, destination, opts=@@default_options)
+#transcribe is ripe for an update to be done at time of request
+	def initialize(origin = "", destination = "", opts=@@default_options)
 		@origin = origin
 		@destination = destination
 		@waypoints = []
 		@options = opts.merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
 	end
 
+	def update_origin address
+		@options[:origin] = transcribe address
+	end
+
+	def update_destination address
+		@options[:destination] = transcribe address
+	end
+
 	def add_waypoint address
-		@waypoints << address
+		@waypoints << transcribe address
 	end
 
 	def get_waypoints
@@ -32,18 +40,18 @@ class GoogleDirections
 	def get_directions
 		@options[:waypoints] = get_waypoints unless @waypoints.blank?
 		@url = @@base_url + '?' + @options.to_query
+		#might switch to JSON, need to see if Nokogiri or JSON is faster
 		@xml = open(@url).read
-		@doc = Nokogiri::XML(@xml)
-		@status = @doc.css('status').text
-		@xml = open(@url).read
+		@directions = Nokogiri::XML(@xml)
+		@status = @directions.css('status').text
 	end
 
 	def get_overview_polyline
-		@doc.css("overview_polyline").css("points").text
+		@directions.css("overview_polyline").css("points").text
 	end
 
 	def get_legs
-		@doc.css("leg")
+		@directions.css("leg")
 	end
 
 	def get_steps leg
@@ -64,6 +72,7 @@ class GoogleDirections
 		polylines.each do |p|
 			url_part += "&path=enc:" + p
 		end
+		url_part
 	end
 
 	def xml_call
@@ -77,7 +86,7 @@ class GoogleDirections
 		if @status != "OK"
 			drive_time = 0
 		else
-			drive_time = @doc.css("duration value").last.text
+			drive_time = @directions.css("duration value").last.text
 			convert_to_minutes(drive_time)
 		end
 	end
@@ -88,7 +97,7 @@ class GoogleDirections
 		unless @status == 'OK'
 			@distance = 0
 		else
-			@distance = @doc.css("distance value").last.text
+			@distance = @directions.css("distance value").last.text
 		end
 	end
 
@@ -97,7 +106,7 @@ class GoogleDirections
 		unless @status == 'OK'
 			@distance_text = "0 km"
 		else
-			@distance_text = @doc.css("distance text").last.text
+			@distance_text = @directions.css("distance text").last.text
 		end
 	end
 
@@ -117,7 +126,7 @@ class GoogleDirections
 
 	def steps
 		if @status == 'OK'
-			@doc.css('html_instructions').map {|a| a.text }
+			@directions.css('html_instructions').map {|a| a.text }
 		else
 			[]
 		end
@@ -136,7 +145,6 @@ class GoogleDirections
 end
 
 class Hash
-
 	def to_query
 		params = ''
 #should there be some url encoding going on?
@@ -147,5 +155,4 @@ class Hash
 		params.chop! # trailing &
 		params
 	end unless method_defined? :to_query
-
 end
