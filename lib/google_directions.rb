@@ -5,111 +5,147 @@ require 'open-uri'
 require 'nokogiri'
 
 class GoogleDirections
+	attr_reader :status, :doc, :xml, :origin, :destination, :options
+	@@base_url = 'http://maps.googleapis.com/maps/api/directions/xml'
+	@@default_options = {
+		:language => :en,
+		:alternative => :true,
+		:sensor => :false,
+		:mode => :driving,
+	}
 
-  attr_reader :status, :doc, :xml, :origin, :destination, :options
+	def initialize(origin, destination, opts=@@default_options)
+		@origin = origin
+		@destination = destination
+		@waypoints = nil
+		@options = opts.merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
+	end
 
-  @@base_url = 'http://maps.googleapis.com/maps/api/directions/xml'
+	def get_directions
+		@options[:waypoints] = get_waypoints if @waypoints
+		@url = @@base_url + '?' + @options.to_query
+		@xml = open(@url).read
+		@doc = Nokogiri::XML(@xml)
+		@status = @doc.css('status').text
+		@xml = open(@url).read
+	end
 
-  @@default_options = {
-    :language => :en,
-    :alternative => :true,
-    :sensor => :false,
-    :mode => :driving,
-  }
+	def add_waypoint address
+		@waypoints << address
+	end
 
-  def initialize(origin, destination, opts=@@default_options)
-    @origin = origin
-    @destination = destination
-    @options = opts.merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
+	def get_waypoints
+		@waypoints.join("|")
+	end
 
-    @url = @@base_url + '?' + @options.to_query
-    @xml = open(@url).read
-    @doc = Nokogiri::XML(@xml)
-    @status = @doc.css('status').text
-  end
+	def get_overview_polyline
+		@doc.css("overview_polyline").css("points").text
+	end
 
-  def xml_call
-    @url
-  end
+	def get_legs
+		@doc.css("leg")
+	end
 
-  # an example URL to be generated
-  #http://maps.google.com/maps/api/directions/xml?origin=St.+Louis,+MO&destination=Nashville,+TN&sensor=false&key=ABQIAAAAINgf4OmAIbIdWblvypOUhxSQ8yY-fgrep0oj4uKpavE300Q6ExQlxB7SCyrAg2evsxwAsak4D0Liiv
+	def get_steps leg
+		leg.css("steps")
+	end
 
-  def drive_time_in_minutes
-    if @status != "OK"
-      drive_time = 0
-    else
-      drive_time = @doc.css("duration value").last.text
-      convert_to_minutes(drive_time)
-    end
-  end
+	def get_leg_polyline leg
+		polylines = []
+		leg.css("steps").each do |step|
+			polylines << step.css("polyline").css("points").text
+		end
+		polylines
+	end
 
-  # the distance.value field always contains a value expressed in meters.
-  def distance
-    return @distance if @distance
-    unless @status == 'OK'
-      @distance = 0
-    else
-      @distance = @doc.css("distance value").last.text
-    end
-  end
+	def get_leg_polyline_url_part leg
+		polylines = get_leg_polyline leg
+		url_part = ""
+		polylines.each do |p|
+			url_part += "&path=enc:" + p
+		end
+	end
 
-  def distance_text
-    return @distance_text if @distance_text
-    unless @status == 'OK'
-      @distance_text = "0 km"
-    else
-      @distance_text = @doc.css("distance text").last.text
-    end
-  end
+	def xml_call
+		@url
+	end
 
-  def distance_in_miles
-    if @status != "OK"
-      distance_in_miles = 0
-    else
-      meters = distance
-      distance_in_miles = (meters.to_f / 1610.22).round
-      distance_in_miles
-    end
-  end
+	# an example URL to be generated
+	#http://maps.google.com/maps/api/directions/xml?origin=St.+Louis,+MO&destination=Nashville,+TN&sensor=false&key=ABQIAAAAINgf4OmAIbIdWblvypOUhxSQ8yY-fgrep0oj4uKpavE300Q6ExQlxB7SCyrAg2evsxwAsak4D0Liiv
 
-  def public_url
-    "http://maps.google.com/maps?saddr=#{transcribe(@origin)}&daddr=#{transcribe(@destination)}&hl=#{@options[:language]}&ie=UTF8"
-  end
+	def drive_time_in_minutes
+		if @status != "OK"
+			drive_time = 0
+		else
+			drive_time = @doc.css("duration value").last.text
+			convert_to_minutes(drive_time)
+		end
+	end
 
-  def steps
-    if @status == 'OK'
-      @doc.css('html_instructions').map {|a| a.text }
-    else
-      []
-    end
-  end
+	# the distance.value field always contains a value expressed in meters.
+	def distance
+		return @distance if @distance
+		unless @status == 'OK'
+			@distance = 0
+		else
+			@distance = @doc.css("distance value").last.text
+		end
+	end
 
-  private
+	def distance_text
+		return @distance_text if @distance_text
+		unless @status == 'OK'
+			@distance_text = "0 km"
+		else
+			@distance_text = @doc.css("distance text").last.text
+		end
+	end
 
-    def convert_to_minutes(text)
-      (text.to_f / 60).round
-    end
+	def distance_in_miles
+		if @status != "OK"
+			distance_in_miles = 0
+		else
+			meters = distance
+			distance_in_miles = (meters.to_f / 1610.22).round
+			distance_in_miles
+		end
+	end
 
-    def transcribe(location)
-      CGI::escape(location)
-    end
+	def public_url
+		"http://maps.google.com/maps?saddr=#{transcribe(@origin)}&daddr=#{transcribe(@destination)}&hl=#{@options[:language]}&ie=UTF8"
+	end
+
+	def steps
+		if @status == 'OK'
+			@doc.css('html_instructions').map {|a| a.text }
+		else
+			[]
+		end
+	end
+
+	private
+
+		def convert_to_minutes(text)
+			(text.to_f / 60).round
+		end
+
+		def transcribe(location)
+			CGI::escape(location)
+		end
 
 end
 
 class Hash
 
-  def to_query
-    params = ''
+	def to_query
+		params = ''
 
-    each do |k, v|
-      params << "#{k}=#{v}&"
-    end
+		each do |k, v|
+			params << "#{k}=#{v}&"
+		end
 
-    params.chop! # trailing &
-    params
-  end unless method_defined? :to_query
+		params.chop! # trailing &
+		params
+	end unless method_defined? :to_query
 
 end
-
-
