@@ -1,6 +1,6 @@
 Gem::Specification.new do |spec|  
   spec.name        = 'google_directions'  
-  spec.version     = '0.1.8'
+  spec.version     = '0.1.8.1'
   spec.files       = Dir['lib/**/*', 'test/**/*', 'README.textile', 'Gemfile', 'init.rb', 'Manifest', 'Rakefile']
   
   spec.summary     = 'Class for retrieving directions from the Google Directions API service'
