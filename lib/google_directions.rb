@@ -31,7 +31,7 @@ class GoogleDirections
 
 	def add_waypoint address
 		clean_address = transcribe address
-		@waypoints << transcribe clean_address
+		@waypoints << clean_address
 	end
 
 	def get_waypoints
