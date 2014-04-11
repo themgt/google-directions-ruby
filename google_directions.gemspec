@@ -10,5 +10,5 @@ Gem::Specification.new do |spec|
   spec.email             = 'hello@craftedbycreo.com'
   spec.homepage          = 'http://www.craftedbycreo.com/'
   
-  spec.runtime_dependency 'nokogiri', '~1.6.0'
+  spec.add_runtime_dependency 'nokogiri', '~1.6.0'
 end
