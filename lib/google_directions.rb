@@ -1,12 +1,12 @@
 # encoding: UTF-8
 require 'cgi'
+require 'json'
 require 'net/http'
 require 'open-uri'
-require 'nokogiri'
 
 class GoogleDirections
-  attr_reader :status, :directions, :xml, :origin, :destination, :options
-  @@base_url = 'https://maps.googleapis.com/maps/api/directions/xml'
+  attr_reader :status, :directions, :json, :origin, :destination, :options
+  @@base_url = 'https://maps.googleapis.com/maps/api/directions/json'
   @@default_options = {
     :language => :en,
     :alternative => :true,
@@ -14,11 +14,12 @@ class GoogleDirections
     :mode => :driving,
   }
 #transcribe is ripe for an update to be done at time of request
-  def initialize(origin = "", destination = "", opts=@@default_options)
+  def initialize(origin = "", destination = "", opts={})
     @origin = origin
     @destination = destination
     @waypoints = []
-    @options = opts.merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
+    @options = opts.merge(@@default_options)
+                   .merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
   end
 
   def update_origin address
@@ -39,35 +40,34 @@ class GoogleDirections
   end
 
   def get_directions
-    @options[:waypoints] = get_waypoints unless @waypoints.blank?
+    @options[:waypoints] = get_waypoints unless @waypoints.empty?
     @url = @@base_url + '?' + @options.to_query
-    #might switch to JSON, need to see if Nokogiri or JSON is faster
-    @xml = open(@url).read
-    @directions = Nokogiri::XML(@xml)
-    @status = @directions.css('status').text
+    @directions = JSON.parse open(@url).read
+    @status = @directions['status']
   end
 
   def get_overview_polyline
-    @directions.css("overview_polyline").css("points").text
+    @directions['overview_polyline']['points']
   end
 
   def get_legs
-    @directions.css("leg")
+    @directions['leg']
   end
 
   def get_steps leg = nil
     if @status == 'OK'
-      @directions.css('steps') if leg.nil?
-      leg.css("step") unless leg.nil?
+      steps = @directions['routes'].first['legs'].first['steps'] if leg.nil?
+      steps = leg['steps'] unless leg.nil?
     else
-      []
+      steps = []
     end
+    steps
   end
 
   def get_leg_polyline leg
     polylines = []
-    leg.css("step").each do |step|
-      polylines << step.css("polyline").css("points").text
+    leg['steps'].each do |step|
+      polylines << step['polyline']['points']
     end
     polylines
   end
@@ -81,43 +81,49 @@ class GoogleDirections
     url_part
   end
 
-  def get_text_directions
-    @directions.css("html_instructions").map { |e| e.text }
+  def get_text_directions leg = nil
+    @directions['routes'].first['legs'].first['steps'].map {|step| step['html_instructions']}.join('\n') if leg.nil?
+    leg['steps'].map {|step| step['html_instructions']}.join('\n') unless leg.nil?
   end
 
-  def xml_call
+  def json_call
     @url
   end
 
   # an example URL to be generated
-  #https://maps.google.com/maps/api/directions/xml?origin=St.+Louis,+MO&destination=Nashville,+TN&sensor=false&key=ABQIAAAAINgf4OmAIbIdWblvypOUhxSQ8yY-fgrep0oj4uKpavE300Q6ExQlxB7SCyrAg2evsxwAsak4D0Liiv
+  #https://maps.google.com/maps/api/directions/json?origin=St.+Louis,+MO&destination=Nashville,+TN&sensor=false&key=ABQIAAAAINgf4OmAIbIdWblvypOUhxSQ8yY-fgrep0oj4uKpavE300Q6ExQlxB7SCyrAg2evsxwAsak4D0Liiv
 
-  def drive_time_in_minutes
+  def drive_time_in_minutes leg = nil
     if @status != "OK"
       drive_time = 0
     else
-      drive_time = @directions.css("duration value").last.text
+      drive_time = @directions['routes'].first['legs'].first['duration']['value'].to_i if leg.nil?
+      drive_time = leg['duration']['value'].to_i unless leg.nil?
       convert_to_minutes(drive_time)
     end
   end
 
   # the distance.value field always contains a value expressed in meters.
-  def distance
+  def distance leg = nil
     return @distance if @distance
     unless @status == 'OK'
       @distance = 0
     else
-      @distance = @directions.css("distance value").last.text
+      @distance = @directions['routes'].first['legs'].first['distance']['value'].to_i if leg.nil?
+      @distance = leg['distance']['value'].to_i unless leg.nil?
     end
+    @distance
   end
 
-  def distance_text
+  def distance_text leg = nil
     return @distance_text if @distance_text
     unless @status == 'OK'
       @distance_text = "0 km"
     else
-      @distance_text = @directions.css("distance text").last.text
+      @distance_text = @directions['routes'].first['legs'].first['distance']['text'] if leg.nil?
+      @distance_text = leg['distance']['text'] unless leg.nil?
     end
+    @distance_text
   end
 
   def distance_in_miles
@@ -126,8 +132,8 @@ class GoogleDirections
     else
       meters = distance
       distance_in_miles = (meters.to_f / 1610.22).round
-      distance_in_miles
     end
+    distance_in_miles
   end
 
   def public_url
