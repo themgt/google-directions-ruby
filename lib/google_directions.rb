@@ -18,7 +18,7 @@ class GoogleDirections
     @origin = origin
     @destination = destination
     @waypoints = []
-    @options = opts.merge(@@default_options)
+    @options = @@default_options.merge(opts)
                    .merge({:origin => transcribe(@origin), :destination => transcribe(@destination)})
   end
 
