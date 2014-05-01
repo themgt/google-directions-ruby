@@ -82,8 +82,11 @@ class GoogleDirections
   end
 
   def get_text_directions leg = nil
-    @directions['routes'].first['legs'].first['steps'].map {|step| step['html_instructions']}.join('\n') if leg.nil?
-    leg['steps'].map {|step| step['html_instructions']}.join('\n') unless leg.nil?
+    if leg.nil?
+      @directions['routes'].first['legs'].first['steps'].map {|step| step['html_instructions']}.join('\n')
+    else
+      leg['steps'].map {|step| step['html_instructions']}.join('\n')
+    end
   end
 
   def json_call
